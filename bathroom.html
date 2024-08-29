@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bathroom Code Finder</title>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDm25uh1YtFQb01225StIWKP8VWCMR_NHk&callback=initMap&libraries=&v=weekly" async></script>
+<style>
+    /* Simple CSS for layout */
+    #map {
+        height: 80vh;
+        width: 100%;
+    }
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgb(0,0,0);
+        background-color: rgba(0,0,0,0.4);
+        padding-top: 60px;
+    }
+    .modal-content {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+    }
+    .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+    }
+    .close:hover,
+    .close:focus {
+        color: black;
+        text-decoration: none;
+        cursor: pointer;
+    }
+</style>
+</head>
+<body>
+<h1>Bathroom Code Finder</h1>
+<div id="map"></div>
+
+<!-- The Modal -->
+<div id="myModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <p>Please enter the bathroom code:</p>
+        <input type="text" id="bathroomCodeInput" placeholder="Enter bathroom code">
+        <button onclick="submitCode()">Submit</button>
+    </div>
+</div>
+
+<script>
+  // Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyDMJlfraZTCNDlit1dgJ4Z1MbLdLgGG1V8",
+    authDomain: "cluster-825c6.firebaseapp.com",
+    databaseURL: "https://cluster-825c6-default-rtdb.firebaseio.com",
+    projectId: "cluster-825c6",
+    storageBucket: "cluster-825c6.appspot.com",
+    messagingSenderId: "274663865161",
+    appId: "1:274663865161:web:f8ff687b71efbe2b557898",
+    measurementId: "G-KCM0ZSB341"
+  };
+
+  // Initialize Firebase
+  const app = firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  // Initialize and add the map
+  function initMap() {
+    const usa = { lat: 37.0902, lng: -95.7129 };
+    const map = new google.maps.Map(document.getElementById("map"), {
+      zoom: 4,
+      center: usa,
+    });
+
+    // Example marker
+    const marker = new google.maps.Marker({
+      position: usa,
+      map: map,
+      title: "Click to see the bathroom code or add one"
+    });
+
+    marker.addListener("click", function() {
+      showModal();
+    });
+  }
+
+  // Show the modal for adding a new bathroom code
+  function showModal() {
+    var modal = document.getElementById("myModal");
+    var span = document.getElementsByClassName("close")[0];
+
+    modal.style.display = "block";
+
+    span.onclick = function() {
+      modal.style.display = "none";
+    }
+
+    window.onclick = function(event) {
+      if (event.target == modal) {
+        modal.style.display = "none";
+      }
+    }
+  }
+
+  // Submit a new bathroom code to Firebase
+  function submitCode() {
+    const code = document.getElementById("bathroomCodeInput").value;
+    if (code) {
+      database.ref('bathroomCodes/').push({
+        code: code
+      });
+      alert("Code submitted!");
+      document.getElementById("myModal").style.display = "none";
+    } else {
+      alert("Please enter a code!");
+    }
+  }
+</script>
+</body>
+</html>
