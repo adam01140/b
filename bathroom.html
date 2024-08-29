@@ -7,7 +7,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 <!-- Include the Places library -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDm25uh1YtFQb01225StIWKP8VWCMR_NHk&callback=initMap&libraries=places&v=weekly" async></script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDm25uh1YtFQb01225StIWKP8VWCMR_NHk&callback=initMap&libraries=places,geometry&v=weekly" async></script>
 
 <style>
@@ -57,9 +56,23 @@
 <div id="myModal" class="modal">
     <div class="modal-content">
         <span class="close">&times;</span>
+		<center>
         <p id="modalText">Please enter the bathroom code:</p>
         <input type="text" id="bathroomCodeInput" placeholder="Enter bathroom code">
+		<br><br>
         <button onclick="submitCode()">Submit</button>
+    </div>
+</div>
+
+<!-- Report Code Modal -->
+<div id="reportModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+		<center>
+        <p id="reportModalText">Report a new code for this location:</p>
+        <input type="text" id="newCodeInput" placeholder="Enter new bathroom code">
+		<br><br>
+        <button onclick="submitNewCode()">Report New Code</button>
     </div>
 </div>
 
@@ -81,7 +94,6 @@ const db = firebase.firestore();
 let selectedLocation = null;
 
 function initMap() {
-    // Check if the user's location is available
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function(position) {
             const userLocation = {
@@ -94,11 +106,9 @@ function initMap() {
             });
             attachMapListeners(map);
         }, function() {
-            // Handle error or user refusal
             handleLocationError(true, map);
         });
     } else {
-        // Browser doesn't support Geolocation
         handleLocationError(false, null);
     }
 }
@@ -110,22 +120,22 @@ function attachMapListeners(map) {
     });
     loadExistingCodes(map);
 }
+
 function nearbySearch(service, location) {
     const request = {
         location: location,
-        radius: '50', // Reduced radius for more precise nearby results
+        radius: '50',
     };
 
     service.nearbySearch(request, function(results, status) {
         if (status === google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
-            // Sort results by distance to the clicked point and pick the closest
             results.sort((a, b) => {
                 let distA = google.maps.geometry.spherical.computeDistanceBetween(location, a.geometry.location);
                 let distB = google.maps.geometry.spherical.computeDistanceBetween(location, b.geometry.location);
                 return distA - distB;
             });
 
-            let closestPlace = results[0]; // This should now be the closest place to the click
+            let closestPlace = results[0];
             if (closestPlace) {
                 showModal(closestPlace.name);
                 selectedLocation = location;
@@ -138,10 +148,9 @@ function nearbySearch(service, location) {
     });
 }
 
-
 function showModal(locationName = "Location details not available") {
     var modalText = document.getElementById("modalText");
-    modalText.textContent = `Please submit bathroom code at ${locationName}:`;
+    modalText.textContent = `You're the first person to poop at ${locationName}. Congrats`;
     var modal = document.getElementById("myModal");
     modal.style.display = "block";
 
@@ -156,9 +165,6 @@ function showModal(locationName = "Location details not available") {
     }
 }
 
-
-
-
 function loadExistingCodes(map) {
     db.collection("bathroomCodes").get().then((querySnapshot) => {
         querySnapshot.forEach((doc) => {
@@ -170,10 +176,27 @@ function loadExistingCodes(map) {
             });
 
             marker.addListener("click", function() {
-                alert("Bathroom code: " + data.code);
+                showReportModal(data.code);
             });
         });
     });
+}
+
+function showReportModal(code) {
+    var reportModalText = document.getElementById("reportModalText");
+    reportModalText.textContent = `The bathroom code is ${code}`;
+    var reportModal = document.getElementById("reportModal");
+    reportModal.style.display = "block";
+
+    document.getElementsByClassName("close")[1].onclick = function() {
+        reportModal.style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target == reportModal) {
+            reportModal.style.display = "none";
+        }
+    }
 }
 
 function handleLocationError(hasGeoLocation, map) {
@@ -188,20 +211,17 @@ function handleLocationError(hasGeoLocation, map) {
         'Error: Your browser doesn\'t support geolocation.');
 }
 
-
-
-
 function submitCode() {
     const code = document.getElementById("bathroomCodeInput").value;
     if (code && selectedLocation) {
         db.collection("bathroomCodes").add({
-            lat: selectedLocation.lat(), // correctly calling lat() method
-            lng: selectedLocation.lng(), // correctly calling lng() method
+            lat: selectedLocation.lat(),
+            lng: selectedLocation.lng(),
             code: code
         }).then(() => {
             alert("Code submitted successfully!");
             document.getElementById("myModal").style.display = "none";
-            location.reload(); // Reload the page to show new marker
+            location.reload();
         }).catch((error) => {
             console.error("Error adding document: ", error);
         });
@@ -210,7 +230,29 @@ function submitCode() {
     }
 }
 
-
+function submitNewCode() {
+    const newCode = document.getElementById("newCodeInput").value;
+    if (newCode && selectedLocation) {
+        db.collection("bathroomCodes").where("lat", "==", selectedLocation.lat())
+        .where("lng", "==", selectedLocation.lng())
+        .get()
+        .then(querySnapshot => {
+            querySnapshot.forEach(doc => {
+                db.collection("bathroomCodes").doc(doc.id).update({
+                    code: newCode
+                }).then(() => {
+                    alert("New code submitted successfully!");
+                    document.getElementById("reportModal").style.display = "none";
+                    location.reload();
+                }).catch((error) => {
+                    console.error("Error updating document: ", error);
+                });
+            });
+        });
+    } else {
+        alert("Please enter a new code!");
+    }
+}
 </script>
 </body>
 </html>
