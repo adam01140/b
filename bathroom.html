@@ -165,22 +165,6 @@ function showModal(locationName = "Location details not available") {
     }
 }
 
-function loadExistingCodes(map) {
-    db.collection("bathroomCodes").get().then((querySnapshot) => {
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const marker = new google.maps.Marker({
-                position: { lat: data.lat, lng: data.lng },
-                map: map,
-                title: "Bathroom Code"
-            });
-
-            marker.addListener("click", function() {
-                showReportModal(data.code);
-            });
-        });
-    });
-}
 
 function showReportModal(code) {
     var reportModalText = document.getElementById("reportModalText");
@@ -211,24 +195,55 @@ function handleLocationError(hasGeoLocation, map) {
         'Error: Your browser doesn\'t support geolocation.');
 }
 
-function submitCode() {
-    const code = document.getElementById("bathroomCodeInput").value;
-    if (code && selectedLocation) {
-        db.collection("bathroomCodes").add({
-            lat: selectedLocation.lat(),
-            lng: selectedLocation.lng(),
-            code: code
-        }).then(() => {
-            alert("Code submitted successfully!");
-            document.getElementById("myModal").style.display = "none";
-            location.reload();
+function loadExistingCodes(map) {
+    db.collection("bathroomCodes").get().then((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: map,
+                title: "Bathroom Code"
+            });
+
+            marker.addListener("click", function() {
+                selectedLocation = new google.maps.LatLng(data.lat, data.lng); // Ensure selectedLocation is set correctly
+                showReportModal(data.code);
+            });
+        });
+    });
+}
+
+function submitNewCode() {
+    const newCode = document.getElementById("newCodeInput").value;
+    if (newCode && selectedLocation) {
+        db.collection("bathroomCodes")
+        .where("lat", "==", selectedLocation.lat()) 
+        .where("lng", "==", selectedLocation.lng())
+        .get()
+        .then(querySnapshot => {
+            if (!querySnapshot.empty) {
+                querySnapshot.forEach(doc => {
+                    db.collection("bathroomCodes").doc(doc.id).update({
+                        code: newCode
+                    }).then(() => {
+                        alert("New code submitted successfully!");
+                        document.getElementById("reportModal").style.display = "none";
+                        location.reload();
+                    }).catch((error) => {
+                        console.error("Error updating document: ", error);
+                    });
+                });
+            } else {
+                alert("No matching location found to update the code.");
+            }
         }).catch((error) => {
-            console.error("Error adding document: ", error);
+            console.error("Error fetching document: ", error);
         });
     } else {
-        alert("Please enter a code!");
+        alert("Please enter a new code!");
     }
 }
+
 
 function submitNewCode() {
     const newCode = document.getElementById("newCodeInput").value;
