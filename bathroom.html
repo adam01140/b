@@ -124,7 +124,7 @@ function attachMapListeners(map) {
 function nearbySearch(service, location) {
     const request = {
         location: location,
-        radius: '50',
+        radius: '10', // Adjust the radius as needed
     };
 
     service.nearbySearch(request, function(results, status) {
@@ -137,8 +137,26 @@ function nearbySearch(service, location) {
 
             let closestPlace = results[0];
             if (closestPlace) {
-                showModal(closestPlace.name);
                 selectedLocation = location;
+                
+                // Check if the clicked location is near an existing marker
+                db.collection("bathroomCodes")
+                    .where("lat", "==", closestPlace.geometry.location.lat())
+                    .where("lng", "==", closestPlace.geometry.location.lng())
+                    .get()
+                    .then(querySnapshot => {
+                        if (!querySnapshot.empty) {
+                            querySnapshot.forEach(doc => {
+                                const data = doc.data();
+                                showReportModal(data.code); // Show the existing code
+                            });
+                        } else {
+                            showModal(closestPlace.name); // Show the default modal if no code found
+                        }
+                    }).catch(error => {
+                        console.error("Error fetching document: ", error);
+                        showModal(closestPlace.name); // Show default modal on error
+                    });
             } else {
                 showModal("Specific location details unavailable");
             }
@@ -147,6 +165,7 @@ function nearbySearch(service, location) {
         }
     });
 }
+
 
 function showModal(locationName = "Location details not available") {
     var modalText = document.getElementById("modalText");
@@ -199,24 +218,6 @@ function handleLocationError(hasGeoLocation, map) {
 }
 
 
-
-function loadExistingCodes(map) {
-    db.collection("bathroomCodes").get().then((querySnapshot) => {
-        querySnapshot.forEach((doc) => {
-            const data = doc.data();
-            const marker = new google.maps.Marker({
-                position: { lat: data.lat, lng: data.lng },
-                map: map,
-                title: "Bathroom Code"
-            });
-
-            marker.addListener("click", function() {
-                selectedLocation = new google.maps.LatLng(data.lat, data.lng); // Ensure selectedLocation is set correctly
-                showReportModal(data.code);
-            });
-        });
-    });
-}
 
 function submitNewCode() {
     const newCode = document.getElementById("newCodeInput").value;
@@ -273,38 +274,86 @@ function checkAndUpdateCode(docId, newCode) {
 }
 
 
+let markers = []; // Store all markers
 
-function submitNewCode() {
-    const newCode = document.getElementById("newCodeInput").value;
-    if (newCode && selectedLocation) {
-        const locationRef = db.collection("bathroomCodes")
-            .where("lat", "==", selectedLocation.lat())
-            .where("lng", "==", selectedLocation.lng());
+function loadExistingCodes(map) {
+    db.collection("bathroomCodes").get().then((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: map,
+                title: "Bathroom Code"
+            });
 
-        locationRef.get().then(querySnapshot => {
-            if (!querySnapshot.empty) {
-                querySnapshot.forEach(doc => {
-                    // Add new code submission to the codeSubmissions subcollection
-                    const submissionRef = db.collection("bathroomCodes").doc(doc.id).collection("codeSubmissions").doc();
+            // Store marker and its associated data
+            markers.push({ marker: marker, data: data });
 
-                    submissionRef.set({
-                        code: newCode,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    }).then(() => {
-                        checkAndUpdateCode(doc.id, newCode);
-                    }).catch(error => {
-                        console.error("Error submitting new code: ", error);
-                    });
-                });
-            } else {
-                alert("No matching location found to submit the code.");
-            }
-        }).catch(error => {
-            console.error("Error fetching document: ", error);
+            marker.addListener("click", function() {
+                selectedLocation = new google.maps.LatLng(data.lat, data.lng); // Ensure selectedLocation is set correctly
+                showReportModal(data.code);
+            });
         });
-    } else {
-        alert("Please enter a new code!");
+    });
+}
+
+function nearbySearch(service, location) {
+    const threshold = 50; // Distance threshold in meters
+
+    // Check if click is near any existing marker
+    let nearbyMarker = markers.find(({ marker }) => {
+        const distance = google.maps.geometry.spherical.computeDistanceBetween(location, marker.getPosition());
+        return distance <= threshold;
+    });
+
+    if (nearbyMarker) {
+        selectedLocation = nearbyMarker.marker.getPosition();
+        showReportModal(nearbyMarker.data.code); // Show the existing code
+        return;
     }
+
+    // If no nearby marker, proceed with regular nearby search
+    const request = {
+        location: location,
+        radius: '50',
+    };
+
+    service.nearbySearch(request, function(results, status) {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
+            results.sort((a, b) => {
+                let distA = google.maps.geometry.spherical.computeDistanceBetween(location, a.geometry.location);
+                let distB = google.maps.geometry.spherical.computeDistanceBetween(location, b.geometry.location);
+                return distA - distB;
+            });
+
+            let closestPlace = results[0];
+            if (closestPlace) {
+                selectedLocation = location;
+                
+                db.collection("bathroomCodes")
+                    .where("lat", "==", closestPlace.geometry.location.lat())
+                    .where("lng", "==", closestPlace.geometry.location.lng())
+                    .get()
+                    .then(querySnapshot => {
+                        if (!querySnapshot.empty) {
+                            querySnapshot.forEach(doc => {
+                                const data = doc.data();
+                                showReportModal(data.code); // Show the existing code
+                            });
+                        } else {
+                            showModal(closestPlace.name); // Show the default modal if no code found
+                        }
+                    }).catch(error => {
+                        console.error("Error fetching document: ", error);
+                        showModal(closestPlace.name); // Show default modal on error
+                    });
+            } else {
+                showModal("Specific location details unavailable");
+            }
+        } else {
+            showModal("No places found nearby");
+        }
+    });
 }
 
 </script>
