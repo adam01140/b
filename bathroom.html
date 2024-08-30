@@ -184,16 +184,21 @@ function showReportModal(code) {
 }
 
 function handleLocationError(hasGeoLocation, map) {
-    var pos = map ? map.getCenter() : { lat: 37.0902, lng: -95.7129 };
+    // Set default location to California if geolocation fails
+    const defaultLocation = { lat: 36.7783, lng: -119.4179 }; // Latitude and longitude for California
+
+    // Initialize the map centered on California
     map = new google.maps.Map(document.getElementById("map"), {
-        center: pos,
-        zoom: 4,
+        center: defaultLocation,
+        zoom: 6, // Adjust the zoom level as needed
     });
+
+    // Attach listeners after initializing the map
     attachMapListeners(map);
-    alert(hasGeoLocation ?
-        'Error: The Geolocation service failed.' :
-        'Error: Your browser doesn\'t support geolocation.');
+
 }
+
+
 
 function loadExistingCodes(map) {
     db.collection("bathroomCodes").get().then((querySnapshot) => {
@@ -244,30 +249,64 @@ function submitNewCode() {
     }
 }
 
+function checkAndUpdateCode(docId, newCode) {
+    const codeSubmissionsRef = db.collection("bathroomCodes").doc(docId).collection("codeSubmissions");
+    
+    codeSubmissionsRef.where("code", "==", newCode).get().then(querySnapshot => {
+        if (querySnapshot.size >= 3) {
+            // Update the main code if there are at least 3 matching submissions
+            db.collection("bathroomCodes").doc(docId).update({
+                code: newCode
+            }).then(() => {
+                alert("Bathroom code updated!!");
+                document.getElementById("reportModal").style.display = "none";
+                location.reload();
+            }).catch(error => {
+                console.error("Error updating the code: ", error);
+            });
+        } else {
+            alert(`Thank you for reporting the new code!!`);
+        }
+    }).catch(error => {
+        console.error("Error checking code submissions: ", error);
+    });
+}
+
+
 
 function submitNewCode() {
     const newCode = document.getElementById("newCodeInput").value;
     if (newCode && selectedLocation) {
-        db.collection("bathroomCodes").where("lat", "==", selectedLocation.lat())
-        .where("lng", "==", selectedLocation.lng())
-        .get()
-        .then(querySnapshot => {
-            querySnapshot.forEach(doc => {
-                db.collection("bathroomCodes").doc(doc.id).update({
-                    code: newCode
-                }).then(() => {
-                    alert("New code submitted successfully!");
-                    document.getElementById("reportModal").style.display = "none";
-                    location.reload();
-                }).catch((error) => {
-                    console.error("Error updating document: ", error);
+        const locationRef = db.collection("bathroomCodes")
+            .where("lat", "==", selectedLocation.lat())
+            .where("lng", "==", selectedLocation.lng());
+
+        locationRef.get().then(querySnapshot => {
+            if (!querySnapshot.empty) {
+                querySnapshot.forEach(doc => {
+                    // Add new code submission to the codeSubmissions subcollection
+                    const submissionRef = db.collection("bathroomCodes").doc(doc.id).collection("codeSubmissions").doc();
+
+                    submissionRef.set({
+                        code: newCode,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    }).then(() => {
+                        checkAndUpdateCode(doc.id, newCode);
+                    }).catch(error => {
+                        console.error("Error submitting new code: ", error);
+                    });
                 });
-            });
+            } else {
+                alert("No matching location found to submit the code.");
+            }
+        }).catch(error => {
+            console.error("Error fetching document: ", error);
         });
     } else {
         alert("Please enter a new code!");
     }
 }
+
 </script>
 </body>
 </html>
