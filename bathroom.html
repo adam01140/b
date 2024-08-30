@@ -155,21 +155,51 @@ const firebaseConfig = {
 
 const app = firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-
+let selectedPlaceName = null;
 let selectedLocation = null;
 let searchCircle = null; // Global variable to store the search circle
 let map; // Global variable to store the map instance
 
+function submitNewCode() {
+    const newCode = document.getElementById("newCodeInput").value;
+    if (newCode && selectedLocation) {
+        db.collection("bathroomCodes")
+        .where("lat", "==", selectedLocation.lat()) 
+        .where("lng", "==", selectedLocation.lng())
+        .get()
+        .then(querySnapshot => {
+            if (!querySnapshot.empty) {
+                querySnapshot.forEach(doc => {
+                    db.collection("bathroomCodes").doc(doc.id).update({
+                        code: newCode
+                    }).then(() => {
+                        alert("New code submitted successfully!");
+                        document.getElementById("reportModal").style.display = "none";
+                        location.reload();
+                    }).catch((error) => {
+                        console.error("Error updating document: ", error);
+                    });
+                });
+            } else {
+                alert("No matching location found to update the code.");
+            }
+        }).catch((error) => {
+            console.error("Error fetching document: ", error);
+        });
+    } else {
+        alert("Please enter a new code!");
+    }
+}
+
 function submitCode() {
     const codeInput = document.getElementById("bathroomCodeInput").value;
 
-    if (codeInput && selectedLocation) {
-        // Save the code to the Firestore database
+    if (codeInput && selectedLocation && selectedPlaceName) {
         db.collection("bathroomCodes").add({
             code: codeInput,
             lat: selectedLocation.lat(),
             lng: selectedLocation.lng(),
-            locationName: "Alisal Club" // Replace with the actual location name if available
+            locationName: selectedPlaceName // Store the place name
         }).then(() => {
             alert("Bathroom code submitted successfully!");
             document.getElementById("myModal").style.display = "none";
@@ -259,7 +289,8 @@ function nearbySearch(service, location) {
             let closestPlace = results[0];
             if (closestPlace) {
                 selectedLocation = closestPlace.geometry.location;
-                
+                selectedPlaceName = closestPlace.name;
+				
                 db.collection("bathroomCodes")
                     .where("lat", "==", closestPlace.geometry.location.lat())
                     .where("lng", "==", closestPlace.geometry.location.lng())
@@ -353,36 +384,7 @@ function handleLocationError(hasGeoLocation) {
     attachMapListeners(map);
 }
 
-function submitNewCode() {
-    const newCode = document.getElementById("newCodeInput").value;
-    if (newCode && selectedLocation) {
-        db.collection("bathroomCodes")
-        .where("lat", "==", selectedLocation.lat()) 
-        .where("lng", "==", selectedLocation.lng())
-        .get()
-        .then(querySnapshot => {
-            if (!querySnapshot.empty) {
-                querySnapshot.forEach(doc => {
-                    db.collection("bathroomCodes").doc(doc.id).update({
-                        code: newCode
-                    }).then(() => {
-                        alert("New code submitted successfully!");
-                        document.getElementById("reportModal").style.display = "none";
-                        location.reload();
-                    }).catch((error) => {
-                        console.error("Error updating document: ", error);
-                    });
-                });
-            } else {
-                alert("No matching location found to update the code.");
-            }
-        }).catch((error) => {
-            console.error("Error fetching document: ", error);
-        });
-    } else {
-        alert("Please enter a new code!");
-    }
-}
+
 
 function checkAndUpdateCode(docId, newCode) {
     const codeSubmissionsRef = db.collection("bathroomCodes").doc(docId).collection("codeSubmissions");
